@@ -3,367 +3,732 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DS12 Kitchen Game Simulator</title>
+    <title>Multi-Game Probability Simulator</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
-        .card-effect { background-color: #e9ecef; padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem; font-size: 0.875rem; }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .card-name { font-weight: 600; color: #4b5563; }
+        .result-table th, .result-table td { padding: 0.5rem; text-align: left; }
+        .result-table thead th { background-color: #1f2937; color: white; }
+        .tab-button {
+            padding: 10px 20px;
+            font-weight: 600;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+        }
+        .tab-button.active {
+            background-color: #ffffff;
+            color: #4f46e5;
+            border-color: #e5e7eb;
+            transform: translateY(1px); /* Lifts tab */
+        }
+        .tab-button:not(.active) {
+            background-color: #e5e7eb;
+            color: #6b7280;
+        }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
-    <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 sm:p-10">
-        <h1 class="3xl sm:text-4xl font-extrabold text-gray-800 mb-2 border-b-4 border-amber-500 pb-2">
-            DS12 Kitchen Game Simulator
-        </h1>
-        <p class="text-gray-600 mb-6">Analyze card combinations for the best chance of exceeding two product thresholds. (Simulation runs **20,000 trials** per combination)</p>
-
-        <!-- Card Effects Reference -->
-        <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-            <h3 class="font-semibold text-lg text-amber-700 mb-3">Card Effects</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-700">
-                <div class="card-effect">A (Heat Control, Max 4): +12 to random color. 50% chance to retrigger (recursive).</div>
-                <div class="card-effect">B (Cut, Max 3): +10-15 to Random Color.</div>
-                <div class="card-effect">C (Season, Max 1): x2 to random color.</div>
-                <div class="card-effect">D (Slow Cook, Max 2): +4 to all colors when Heat Control (A) triggers (cumulative).</div>
-                <div class="card-effect">E (Ferment, Max 2): Future Heat Control effects retrigger at least 2 times (adds +2 guaranteed extra triggers, **non-cumulative**).</div>
-                <div class="card-effect">F (Bake, Max 1): Redistribute point difference at the end (to maximize product).</div>
-            </div>
-        </div>
-
-        <!-- Input Form -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
-            <div class="col-span-1">
-                <label for="numCards" class="block text-sm font-medium text-gray-700 mb-1">Cards Drawn (3-8):</label>
-                <input type="number" id="numCards" value="6" min="3" max="8" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 transition duration-150 shadow-sm">
-            </div>
-            <div class="col-span-1">
-                <label for="threshold1" class="block text-sm font-medium text-gray-700 mb-1">Primary Threshold (&gt;):</label>
-                <input type="number" id="threshold1" value="5000" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 transition duration-150 shadow-sm">
-            </div>
-            <div class="col-span-1">
-                <label for="threshold2" class="block text-sm font-medium text-gray-700 mb-1">Secondary Threshold (&gt;):</label>
-                <input type="number" id="threshold2" value="7500" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 transition duration-150 shadow-sm">
-            </div>
-            <div class="col-span-1">
-                <button onclick="runSimulation()" id="simulateButton" 
-                        class="w-full p-3 bg-amber-600 text-white font-semibold rounded-lg shadow-md hover:bg-amber-700 focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                    Run Simulation
-                </button>
-            </div>
-        </div>
-
-        <!-- Output and Loading Status -->
-        <div id="loadingStatus" class="hidden text-center p-4 bg-blue-100 text-blue-700 rounded-lg mb-6">
-            <div class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></div>
-            Calculating probabilities for thousands of combinations... Please wait.
-        </div>
+<body class="p-4 sm:p-8">
+    <div class="max-w-5xl mx-auto bg-white rounded-xl shadow-2xl">
         
-        <div id="resultsOutput">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Top 5 Results</h2>
-            <div id="resultsTableContainer">
-                <p class="text-gray-500">Enter your settings and click 'Run Simulation' to see results.</p>
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-gray-200">
+            <button id="alchemy-tab-btn" class="tab-button active" onclick="switchTab('alchemy')">🧪 Alchemy</button>
+            <button id="kitchen-tab-btn" class="tab-button" onclick="switchTab('kitchen')">🔪 Kitchen</button>
+            <button id="forge-tab-btn" class="tab-button" onclick="switchTab('forge')">🔥 Forge</button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="app-container" class="p-6">
+            
+            <h1 id="game-title" class="text-3xl font-bold text-center text-gray-800 mb-2">
+                🧪 Alchemy Game Simulator
+            </h1>
+            <p class="text-center text-sm text-gray-500 mb-6">
+                Simulates 10,000 trials for every valid card combination to find the highest probability of success.
+            </p>
+
+            <!-- Card Definitions -->
+            <div id="card-definitions" class="bg-indigo-50 p-4 rounded-lg mb-6 border border-indigo-200">
+                <!-- Card definitions will be injected here -->
+            </div>
+
+            <!-- Input Form -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                <div class="flex-1">
+                    <label for="setupSelector" class="block text-sm font-medium text-gray-700" id="setup-label">Production</label>
+                    <select id="setupSelector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border bg-white" required>
+                        <!-- Options injected here -->
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label for="numCards" class="block text-sm font-medium text-gray-700" id="num-cards-label">Cards to Draw (3-9)</label>
+                    <input type="number" id="numCards" value="6" min="3" max="9" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" required>
+                    <p class="text-xs text-gray-500 mt-1" id="startingBonusText"></p>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 mb-6 items-end">
+                <div class="flex-1">
+                    <label for="threshold1" class="block text-sm font-medium text-gray-700">Primary Threshold (&gt; X)</label>
+                    <input type="number" id="threshold1" value="6630" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" required>
+                </div>
+                
+                <div class="flex-shrink-0 mb-1">
+                    <button id="swapThresholds" class="p-2 w-full sm:w-auto bg-gray-200 hover:bg-gray-300 rounded-lg shadow-sm text-gray-700 font-semibold text-sm transition duration-150" title="Swap Primary and Secondary Thresholds">
+                        &#x21C6; Swap
+                    </button>
+                </div>
+                
+                <div class="flex-1">
+                    <label for="threshold2" class="block text-sm font-medium text-gray-700">Secondary Threshold (&gt; Y)</label>
+                    <input type="number" id="threshold2" value="8200" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" required>
+                </div>
+            </div>
+
+
+            <button id="runSimulation" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 disabled:bg-indigo-300">
+                Run Simulation
+            </button>
+
+            <div id="loadingIndicator" class="mt-4 hidden text-center text-indigo-600 font-semibold">
+                Calculating... This may take a moment.
+            </div>
+
+            <!-- Results Table -->
+            <div id="resultsArea" class="mt-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Top 5 Combinations</h2>
+                <div class="overflow-x-auto">
+                    <table id="resultsTable" class="result-table min-w-full rounded-lg shadow-lg hidden">
+                        <thead>
+                            <tr>
+                                <th class="rounded-tl-lg">Rank</th>
+                                <th>Combination</th> <!-- UPDATED: Removed (Count) and Effects -->
+                                <th class="text-right">P(&gt;T1)</th>
+                                <th class="rounded-tr-lg text-right">P(&gt;T2)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Results injected here -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="noResults" class="hidden text-center text-gray-500 mt-4">No combinations reached the primary threshold.</p>
+                <p id="totalCombinations" class="text-xs text-gray-400 mt-4 text-center"></p>
             </div>
         </div>
     </div>
 
     <script>
-        const CARD_MAXES = { 'A': 4, 'B': 3, 'C': 1, 'D': 2, 'E': 2, 'F': 1 };
-        const NUM_SIMULATIONS = 20000; // Reduced from 100000 to 20000
-        const CARD_NAMES = {
-            'A': 'Heat Control',
-            'B': 'Cut',
-            'C': 'Season',
-            'D': 'Slow Cook',
-            'E': 'Ferment',
-            'F': 'Bake'
+        
+        // ====================================================================
+        // === CORE CONFIGURATION & LOGIC FOR ALL GAMES =======================
+        // ====================================================================
+
+        const NUM_SIMULATIONS = 10000;
+        const MIN_CARDS = 3; 
+        const MAX_CARDS = 9; 
+
+        // --- ALCHEMY GAME CONFIG ---
+        const ALCHEMY_CONFIG = {
+            id: 'alchemy',
+            title: '🧪 Alchemy Game Simulator',
+            cardMaxes: { 'A': 4, 'B': 4, 'C': 1, 'D': 2, 'E': 2, 'F': 1, 'H': 2 },
+            cardDetails: {
+                'A': 'Ingredients (max 4): +20 to Highest Color, -4 to Lowest Color.',
+                'B': 'Grind (max 4): +15 to Lowest Color, -5 to Highest Color.',
+                'C': 'Distill (max 1): x2 to Highest Color.',
+                'D': 'Overload (max 2): +40 to Highest Color. -3 to random color per subsequent card effect triggered.',
+                'E': 'Enchant (max 2): +30 to Lowest Color. -1 to All Colors per subsequent card effect triggered.',
+                'F': 'Fuse (max 1): +10 to All Colors if Final Point Gap < 20.',
+                'H': 'Overcharge (max 2): Prevents additions to Lowest Color from Next 2 cards. Instead, adds 3x their value to Highest Color.'
+            },
+            setupConfigs: {
+                'earth_essence': { name: 'Earth Essence', numCards: 6, t1: 4550, t2: 10000, bonusType: 'none' },
+                'extraction_flask': { name: 'Extraction Flask', numCards: 7, t1: 6270, t2: 13200, bonusType: 'none' },
+                'refined_illusion': { name: 'Refined Illusion Potion', numCards: 7, t1: 5150, t2: 10900, bonusType: 'none' },
+                'fireward_ring': { name: 'Fireward Ring', numCards: 9, t1: 6630, t2: 8200, bonusType: 'firewardRingStart' } // +15 to Random Color at Start
+            },
+            simulateGame: (cardPermutation, startingBonusType) => {
+                let x = 1; let y = 1;
+                
+                // --- Fireward Ring Initial Bonus ---
+                if (startingBonusType === 'firewardRingStart') {
+                    Math.random() < 0.5 ? x += 15 : y += 15;
+                }
+                
+                let dOverloadActive = 0; let eEnchantActive = 0;
+                let fFuseDrawn = false; let hOverchargeCount = 0; 
+
+                for (const card of cardPermutation) {
+                    const isXHighest = x >= y;
+                    let highestColor = isXHighest ? x : y;
+                    let lowestColor = isXHighest ? y : x;
+                    let lowestAddition = 0;
+
+                    if (card === 'H') { hOverchargeCount += 2; }
+                    else if (card === 'A') { highestColor += 20; lowestColor -= 4; }
+                    else if (card === 'B') {
+                        highestColor -= 5; lowestAddition = 15;
+                        if (hOverchargeCount > 0) { highestColor += (lowestAddition * 3); hOverchargeCount -= 1; } 
+                        else { lowestColor += lowestAddition; }
+                    }
+                    else if (card === 'C') { highestColor *= 2; }
+                    else if (card === 'D') { highestColor += 40; dOverloadActive += 3; }
+                    else if (card === 'E') {
+                        lowestAddition = 30;
+                        if (hOverchargeCount > 0) { highestColor += (lowestAddition * 3); hOverchargeCount -= 1; } 
+                        else { lowestColor += lowestAddition; }
+                        eEnchantActive += 1;
+                    }
+                    else if (card === 'F') { fFuseDrawn = true; }
+
+                    if (isXHighest) { x = clampToMin1(highestColor); y = clampToMin1(lowestColor); } 
+                    else { x = clampToMin1(lowestColor); y = clampToMin1(highestColor); }
+
+                    if (dOverloadActive > 0) { // D Penalty
+                        const penalty = dOverloadActive;
+                        Math.random() < 0.5 ? x = clampToMin1(x - penalty) : y = clampToMin1(y - penalty);
+                    }
+                    if (eEnchantActive > 0) { // E Penalty
+                        const penalty = eEnchantActive;
+                        x = clampToMin1(x - penalty);
+                        y = clampToMin1(y - penalty);
+                    }
+                }
+                    
+                if (fFuseDrawn) { // F End-game
+                    const pointGap = Math.abs(x - y);
+                    if (pointGap < 20) { x += 10; y += 10; }
+                }
+                    
+                return x * y;
+            }
         };
 
-        /**
-         * Core simulation logic for a single game run.
-         * @param {string[]} card_permutation - The drawn cards in order.
-         * @returns {number} The final product of X * Y.
-         */
-        function simulate_game(card_permutation) {
-            let x = 1;
-            let y = 1;
-            
-            let d_slow_cook_bonus = 0; // Card D: Slow Cook
-            let e_ferment_triggers = 0; // Card E: Ferment
-            let f_bake_used = false; // Card F: Bake
+        // --- KITCHEN GAME CONFIG ---
+        const KITCHEN_CONFIG = {
+            id: 'kitchen',
+            title: '🔪 Kitchen Game Simulator',
+            cardMaxes: { 'A': 4, 'B': 3, 'C': 1, 'D': 2, 'E': 2, 'F': 1 },
+            cardDetails: {
+                'A': 'Heat Control (max 4): +12 to random color. 50% chance to retrigger recursively.',
+                'B': 'Cut (max 3): +10-15 to Random Color.',
+                'C': 'Season (max 1): x2 to random color.',
+                'D': 'Slow Cook (max 2): +4 to all colors when Heat Control (A) triggers (cumulative).',
+                'E': 'Ferment (max 2): Guarantees next Heat Control (A) triggers 2 extra times (non-cumulative).',
+                'F': 'Bake (max 1): Redistribute point difference at the end (x = y = (x+y)/2).'
+            },
+            setupConfigs: {
+                'earthy_flatbread': { name: 'Earthy Flatbread', numCards: 6, t1: 9630, t2: 26500, bonusType: 'none' },
+                'crispy_blackroot': { name: 'Crispy Blackroot', numCards: 7, t1: 13800, t2: 36200, bonusType: 'none' },
+                'salted_corn_chips': { name: 'Salted Corn Chips', numCards: 5, t1: 4620, t2: 12300, bonusType: 'none' },
+                'odd_sweet': { name: 'Odd Sweet', numCards: 8, t1: 18500, t2: 30900, bonusType: 'oddSweetEndGame' } // +5 to all colors if the final point gap is less than 5
+            },
+            simulateGame: (cardPermutation, startingBonusType) => {
+                let x = 1; let y = 1;
+                
+                let dSlowCookBonus = 0; 
+                let eFermentTriggers = 0; 
+                let fBakeDrawn = false;
+                let fermentUsed = false;
 
-            for (const card of card_permutation) {
-                
-                // --- Handle Persistent Effects (D, E, F) ---
-                if (card === 'D') {
-                    // Slow Cook: +4 to all colors when Heat Control (A) triggers (cumulative).
-                    d_slow_cook_bonus += 4;
-                    continue;
-                }
-                
-                if (card === 'E') {
-                    // Ferment: Future Heat Control effects retrigger at least 2 times (adds +2 guaranteed extra triggers, non-cumulative).
-                    // If the bonus is 0, set it to 2. If it's already 2 (from a previous E card), do nothing.
-                    if (e_ferment_triggers === 0) {
-                        e_ferment_triggers = 2; 
-                    }
-                    continue;
-                }
-                
-                if (card === 'F') {
-                    // Bake: Mark for redistribution at the end.
-                    f_bake_used = true;
-                    continue;
-                }
+                const applyAEffect = (add, recursionDepth = 0) => {
+                    if (Math.random() < 0.5) { x += add; } else { y += add; }
+                    x += dSlowCookBonus; y += dSlowCookBonus; // D bonus application
+                    
+                    if (Math.random() < 0.5) { applyAEffect(add, recursionDepth + 1); } // 50% chance to retrigger recursively
+                };
 
-                // --- Card A (Heat Control) Logic ---
-                if (card === 'A') {
-                    // Base triggers: 1 + guaranteed extra triggers from Ferment (E)
-                    const num_initial_triggers = 1 + e_ferment_triggers; 
-                    
-                    let total_triggers = 0;
-                    
-                    for (let i = 0; i < num_initial_triggers; i++) {
-                        // Guaranteed trigger (base or E-guaranteed)
-                        total_triggers += 1;
-                        
-                        // Only the initial base trigger has the recursive property (i === 0)
-                        if (i === 0) { 
-                            while (Math.random() < 0.5) { // 50% chance to retrigger
-                                total_triggers += 1;
-                            }
+                for (const card of cardPermutation) {
+                    if (card === 'A') {
+                        let add = 12;
+                        let extraTriggers = eFermentTriggers;
+                        if (eFermentTriggers > 0) { eFermentTriggers = 0; } // Consume E's effect
+
+                        applyAEffect(add); // Initial trigger
+                        for(let i=0; i<extraTriggers; i++) {
+                            applyAEffect(add); // Guaranteed E triggers
                         }
+                    } 
+                    else if (card === 'B') {
+                        const add = Math.floor(Math.random() * 6) + 10; // 10-15
+                        if (Math.random() < 0.5) { x += add; } else { y += add; }
+                    } 
+                    else if (card === 'C') {
+                        Math.random() < 0.5 ? x *= 2 : y *= 2;
+                    } 
+                    else if (card === 'D') {
+                        dSlowCookBonus += 4;
+                    } 
+                    else if (card === 'E' && !fermentUsed) {
+                        eFermentTriggers = 2; // Non-cumulative, sets to 2
+                        fermentUsed = true;
+                    } 
+                    else if (card === 'F') {
+                        fBakeDrawn = true;
                     }
                     
-                    // Apply effects for all resulting triggers
-                    const current_add = 12;
-                    for (let i = 0; i < total_triggers; i++) {
-                        
-                        // Apply Slow Cook (D) bonus first
-                        x += d_slow_cook_bonus;
-                        y += d_slow_cook_bonus;
-                        
-                        // Apply Heat Control (A) base effect
-                        if (Math.random() < 0.5) {
-                            x += current_add;
+                    x = clampToMin1(x); y = clampToMin1(y);
+                }
+                
+                if (fBakeDrawn) { // F End-game: Redistribute point difference
+                    const avg = Math.floor((x + y) / 2);
+                    x = avg;
+                    y = avg;
+                }
+
+                // --- NEW: Odd Sweet Setup Bonus (End-Game) ---
+                if (startingBonusType === 'oddSweetEndGame') {
+                    const pointGap = Math.abs(x - y);
+                    if (pointGap < 5) {
+                        x += 5;
+                        y += 5;
+                    }
+                }
+                    
+                return x * y;
+            }
+        };
+
+        // --- FORGE GAME CONFIG ---
+        const FORGE_CONFIG = {
+            id: 'forge',
+            title: '🔥 Forge Game Simulator',
+            cardMaxes: { 'A': 4, 'B': 4, 'C': 1, 'D': 2, 'E': 2, 'F': 2, 'G': 2, 'H': 1, 'I': 2 },
+            cardDetails: {
+                // A: Forge Expert (cumulative bonus re-added)
+                'A': 'Forge Expert (max 4): +5 to a random color (X or Y). +5 to subsequent Forge Expert cards (cumulative). (Artisan)', 
+                'B': 'Forge (max 4): +10 to a random color (X or Y). (Artisan)',
+                'C': 'Ignite (max 1): x2 to random color.',
+                'D': 'Heat Up (max 2): Gives +10 to future Artisan cards (A, B, I) (cumulative).',
+                'E': 'Charge (max 2): Future Artisan cards (A, B, I) affect all colors (both X and Y).',
+                'F': 'Multi-Forge (max 2): Next Artisan card triggers 2 extra times (stacking).',
+                'G': 'Reforge (max 2): +3 to all colors when an Artisan effect is triggered (cumulative).',
+                'H': 'Sharpening (max 1): +10 to a random color each time a new unseen card is drawn (Non-stacking effect).',
+                'I': 'Pyroburst (max 2): +12 to random color. Triggers 2 extra times if at least 2 unique buffs (D, E, F, G) were applied. (Artisan)'
+            },
+            // Forge Presets (confirmed correct)
+            setupConfigs: {
+                'thermo_chest': { name: 'Thermo Chest', numCards: 6, t1: 4490, t2: 51000, bonusType: 'none' },
+                'iron_mixing_dish': { name: 'Iron Mixing Dish', numCards: 7, t1: 11800, t2: 49000, bonusType: 'none' },
+                'firefang_sword': { name: 'Firefang Sword', numCards: 8, t1: 28900, t2: 92100, bonusType: 'firefangSwordA' }, // 30% chance for A to trigger 1 extra time (non recursive)
+                'fireproof_helm': { name: 'Fireproof Helm', numCards: 8, t1: 25100, t2: 61700, bonusType: 'fireproofHelmLimit' } // The First 3 "Forge" Cards affect all colors
+            },
+            simulateGame: (cardPermutation, startingBonusType) => {
+                let x = 1; let y = 1;
+                
+                // --- Persistent State/Penalties/Modifiers ---
+                let dBonusPerCard = 0;    // D: Heat Up bonus for A, B, I (cumulative, +10)
+                let aBonusPerCard = 0;    // A: Forge Expert cumulative bonus (+5 for future A's)
+                let eChargeActive = false;  // E: Charge (now persistent)
+                let fMultiTriggers = 0;   // F: Multi-Forge (stacking extra triggers)
+                let gReforgeBonus = 0;    // G: Reforge (+3 all colors on Artisan trigger)
+                let hSharpeningActive = false; // H: Sharpening is active (boolean for non-stacking)
+                let cardsSeenGlobally = new Set(); // H: Tracks unique cards drawn
+                
+                // --- Forge Setup Modifiers ---
+                let forgeCardsPlayed = 0; // For Fireproof Helm (B) bonus
+
+                const getHighestBuffCount = (dApplied, eApplied, fApplied, gApplied) => {
+                    return (dApplied ? 1 : 0) + (eApplied ? 1 : 0) + (fApplied ? 1 : 0) + (gApplied ? 1 : 0);
+                };
+
+                const applyArtisanEffect = (baseAdd, cardType) => {
+                    let numTriggers = 1;
+                    
+                    // F: Multi-Forge triggers
+                    if (fMultiTriggers > 0) {
+                        numTriggers += (fMultiTriggers * 2);
+                        fMultiTriggers = 0; // Consume F effect
+                    }
+
+                    // I: Pyroburst condition check
+                    let iExtraTriggers = 0;
+                    let iDApplied = (cardType === 'I' && dBonusPerCard > 0);
+                    let iEApplied = (cardType === 'I' && eChargeActive); 
+                    let iFApplied = (cardType === 'I' && fMultiTriggers > 0); 
+                    let iGApplied = (cardType === 'I' && gReforgeBonus > 0);
+                    
+                    if (cardType === 'I' && getHighestBuffCount(iDApplied, iEApplied, iFApplied, iGApplied) >= 2) {
+                        iExtraTriggers = 2; // Pyroburst triggers 2 extra times
+                    }
+                    numTriggers += iExtraTriggers;
+
+                    const runEffectIteration = (affectsBothOverride = false) => {
+                        let currentAdd = baseAdd + dBonusPerCard + (cardType === 'A' ? aBonusPerCard : 0); 
+                        let affectsBoth = affectsBothOverride;
+
+                        // Apply base effect
+                        if (affectsBoth) {
+                            x += currentAdd; y += currentAdd;
+                        } else if (Math.random() < 0.5) {
+                            x += currentAdd;
                         } else {
-                            y += current_add;
+                            y += currentAdd;
                         }
-                    }
 
-                } 
-                
-                // --- Card B (Cut) Logic ---
-                else if (card === 'B') {
-                    // Card B (Cut): +10-15 to Random Color.
-                    // Math.floor(Math.random() * (max - min + 1)) + min;
-                    const current_add = Math.floor(Math.random() * 6) + 10;
-                    if (Math.random() < 0.5) {
-                        x += current_add;
-                    } else {
-                        y += current_add;
-                    }
-                }
-                
-                // --- Card C (Season) Logic ---
-                else if (card === 'C') {
-                    // Card C (Season): x2 to random color.
-                    if (Math.random() < 0.5) {
-                        x *= 2;
-                    } else {
-                        y *= 2;
-                    }
-                }
-            }
+                        // G: Reforge bonus
+                        x += gReforgeBonus; y += gReforgeBonus;
+                        
+                        // A: Recursive 30% check (for Firefang setup)
+                        if (cardType === 'A' && startingBonusType === 'firefangSwordA' && Math.random() < 0.3) {
+                            // Run the effect once more, non-recursively.
+                            let bonusA = baseAdd + dBonusPerCard + aBonusPerCard; 
+                            if (Math.random() < 0.5) { x += bonusA; } else { y += bonusA; }
+                            x += gReforgeBonus; y += gReforgeBonus;
+                        }
 
-            // --- Final Effect: Bake (F) Redistribution ---
-            if (f_bake_used) {
-                const total = x + y;
-                // To maximize the product, X and Y should be as close as possible (median)
-                x = Math.floor(total / 2); // Floor
-                y = total - x;             // Remainder (Ceiling)
+                        x = clampToMin1(x); y = clampToMin1(y);
+                    };
+
+                    // --- Main Triggers Loop ---
+                    for(let i = 0; i < numTriggers; i++) {
+                        const isCharged = eChargeActive;
+                        
+                        // Fireproof Helm modification (Only affects Card B/Forge)
+                        let isHelmCharged = false;
+                        if (cardType === 'B' && startingBonusType === 'fireproofHelmLimit' && forgeCardsPlayed < 3) {
+                            isHelmCharged = true;
+                        }
+
+                        runEffectIteration(isCharged || isHelmCharged);
+                    }
+                    
+                    // A: Cumulative bonus for future A's 
+                    if (cardType === 'A') { aBonusPerCard += 5; } 
+                };
+
+                for (const card of cardPermutation) {
+                    const isNewCard = !cardsSeenGlobally.has(card);
+                    
+                    if (card === 'A') { applyArtisanEffect(5, 'A'); } 
+                    else if (card === 'B') { 
+                        applyArtisanEffect(10, 'B');
+                        if (startingBonusType === 'fireproofHelmLimit' && forgeCardsPlayed < 3) {
+                            forgeCardsPlayed++;
+                        }
+                    } 
+                    else if (card === 'C') { Math.random() < 0.5 ? x *= 2 : y *= 2; } 
+                    else if (card === 'D') { dBonusPerCard += 10; }
+                    else if (card === 'E') { eChargeActive = true; }
+                    else if (card === 'F') { fMultiTriggers += 1; } 
+                    else if (card === 'G') { gReforgeBonus += 3; }
+                    else if (card === 'H') { hSharpeningActive = true; } 
+                    else if (card === 'I') { applyArtisanEffect(12, 'I'); }
+
+                    x = clampToMin1(x); y = clampToMin1(y);
+
+                    // H: Sharpening effect applied (Fixed +10 if H is active and card is new)
+                    if (isNewCard && hSharpeningActive) {
+                        Math.random() < 0.5 ? x += 10 : y += 10;
+                        x = clampToMin1(x); y = clampToMin1(y);
+                    }
+                    cardsSeenGlobally.add(card);
+                }
+                    
+                return x * y;
             }
-            
-            return x * y;
+        };
+
+        const ALL_GAMES = {
+            'alchemy': ALCHEMY_CONFIG,
+            'kitchen': KITCHEN_CONFIG,
+            'forge': FORGE_CONFIG
+        };
+
+        let activeGameConfig = ALCHEMY_CONFIG; // Start with Alchemy
+
+        // ====================================================================
+        // === GENERIC SIMULATION & UTILITY FUNCTIONS =========================
+        // ====================================================================
+        
+        function clampToMin1(value) {
+            return Math.max(1, value);
         }
 
-        /**
-         * Calculates the probability for a specific card combination against a threshold.
-         */
-        function calculate_single_probability(cards_list_base, threshold, num_simulations) {
-            let total_successful_simulations = 0;
+        function calculateSingleProbability(config, cardsListBase, threshold, numSimulations, startingBonusType) {
+            let totalSuccessfulSimulations = 0;
             
-            for (let i = 0; i < num_simulations; i++) {
-                // Create a mutable copy and shuffle for this trial
-                let cards = [...cards_list_base];
-                shuffleArray(cards);
-                
-                const product = simulate_game(cards);
+            for (let i = 0; i < numSimulations; i++) {
+                const cards = [...cardsListBase];
+                for (let j = cards.length - 1; j > 0; j--) {
+                    const k = Math.floor(Math.random() * (j + 1));
+                    [cards[j], cards[k]] = [cards[k], cards[j]];
+                }
+
+                const product = config.simulateGame(cards, startingBonusType);
                 if (product > threshold) {
-                    total_successful_simulations++;
+                    totalSuccessfulSimulations++;
                 }
             }
             
-            return (total_successful_simulations / num_simulations) * 100;
+            return (totalSuccessfulSimulations / numSimulations) * 100;
         }
 
-        /**
-         * Generates all valid card combinations and calculates the probability against the primary threshold.
-         */
-        function calculate_all_initial_probabilities(num_cards, threshold_1) {
-            const card_counts_list = [];
-            
-            // Generate all valid card count combinations using nested loops
-            for (let a = 0; a <= CARD_MAXES['A']; a++) { 
-                for (let b = 0; b <= CARD_MAXES['B']; b++) { 
-                    for (let c = 0; c <= CARD_MAXES['C']; c++) { 
-                        for (let d = 0; d <= CARD_MAXES['D']; d++) { 
-                            for (let e = 0; e <= CARD_MAXES['E']; e++) { 
-                                for (let f = 0; f <= CARD_MAXES['F']; f++) {
-                                    if (a + b + c + d + e + f === num_cards) {
-                                        card_counts_list.push({ 'A': a, 'B': b, 'C': c, 'D': d, 'E': e, 'F': f });
-                                    }
-                                }
-                            }
-                        }
+        function generateCombinations(numCards, cardMaxes) {
+            const cardLetters = Object.keys(cardMaxes).sort();
+            const combinations = [];
+
+            function recursiveGenerator(index, currentCounts, currentSum) {
+                if (index === cardLetters.length) {
+                    if (currentSum === numCards) {
+                        combinations.push({...currentCounts});
+                    }
+                    return;
+                }
+
+                const cardLetter = cardLetters[index];
+                const maxCount = cardMaxes[cardLetter];
+                
+                for (let count = 0; count <= maxCount; count++) {
+                    if (currentSum + count <= numCards) {
+                        currentCounts[cardLetter] = count;
+                        recursiveGenerator(index + 1, currentCounts, currentSum + count);
                     }
                 }
+                delete currentCounts[cardLetter]; // Backtrack
             }
 
-            const probability_results = [];
+            const initialCounts = {};
+            recursiveGenerator(0, initialCounts, 0);
+            return combinations;
+        }
+        
+        // ====================================================================
+        // === UI & EVENT HANDLERS ============================================
+        // ====================================================================
+
+        const numCardsInput = document.getElementById('numCards');
+        const threshold1Input = document.getElementById('threshold1');
+        const threshold2Input = document.getElementById('threshold2');
+        const setupSelector = document.getElementById('setupSelector');
+        const startingBonusText = document.getElementById('startingBonusText');
+        const cardDefinitionsDiv = document.getElementById('card-definitions');
+        const gameTitle = document.getElementById('game-title');
+
+
+        function updateUIFromSetup() {
+            const setupId = setupSelector.value;
+            const config = activeGameConfig.setupConfigs[setupId];
             
-            for (const counts of card_counts_list) {
-                // Create the full list of cards for this combination
-                const cards_list_base = [
-                    ...Array(counts['A']).fill('A'),
-                    ...Array(counts['B']).fill('B'),
-                    ...Array(counts['C']).fill('C'),
-                    ...Array(counts['D']).fill('D'),
-                    ...Array(counts['E']).fill('E'),
-                    ...Array(counts['F']).fill('F'),
-                ];
+            // Set the recommended number of cards and thresholds. NumCards is editable.
+            numCardsInput.value = config.numCards;
+            threshold1Input.value = config.t1;
+            threshold2Input.value = config.t2;
 
-                // Calculate probability for threshold_1 (Primary)
-                const prob_1 = calculate_single_probability(cards_list_base, threshold_1, NUM_SIMULATIONS);
-
-                probability_results.push({
-                    counts,
-                    probability_1: prob_1, 
-                    cards_list_base, // Store the list for later use
-                });
+            // Update starting bonus text
+            let bonusDescription = 'Includes: No bonus.';
+            if (config.bonusType === 'firewardRingStart') {
+                bonusDescription = 'Includes: +15 to Random Color at Start.';
+            } else if (config.bonusType === 'oddSweetEndGame') {
+                bonusDescription = 'Includes: +5 to All Colors if final gap < 5.';
+            } else if (config.bonusType === 'firefangSwordA') {
+                bonusDescription = 'Includes: Forge Expert (A) has 30% chance for 1 extra non-recursive trigger.';
+            } else if (config.bonusType === 'fireproofHelmLimit') {
+                bonusDescription = 'Includes: First 3 Forge (B) cards affect both X and Y.';
             }
-            
-            return probability_results;
+
+            startingBonusText.textContent = bonusDescription;
         }
 
-        /** Utility function to shuffle an array (Fisher-Yates) */
-        function shuffleArray(array) {
-            for (let i = array.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[j], array[i]];
-            }
-        }
+        function switchTab(gameId) {
+            // 1. Update Active Config
+            activeGameConfig = ALL_GAMES[gameId];
 
-        function displayResults(top_5_results, threshold1, threshold2) {
-            const container = document.getElementById('resultsTableContainer');
-            if (top_5_results.length === 0) {
-                container.innerHTML = `<p class="text-red-600 font-semibold p-4 bg-red-50 border border-red-200 rounded-lg">No combinations could exceed the primary threshold of > ${threshold1}.</p>`;
-                return;
-            }
+            // 2. Update Tab Styling
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`${gameId}-tab-btn`).classList.add('active');
 
-            let html = `
-                <table class="min-w-full divide-y divide-gray-200 rounded-lg overflow-hidden shadow-lg">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-10">Rank</th>
-                            <th class="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Card Combination</th>
-                            <th class="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">P(&gt;${threshold1})</th>
-                            <th class="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">P(&gt;${threshold2})</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+            // 3. Update Game Title
+            gameTitle.textContent = activeGameConfig.title;
+
+            // 4. Render Card Definitions
+            cardDefinitionsDiv.innerHTML = `
+                <h2 class="text-xl font-semibold text-indigo-700 mb-2">Current Card Effects</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    ${Object.keys(activeGameConfig.cardDetails).map(letter => {
+                        const fullDesc = activeGameConfig.cardDetails[letter];
+                        const parts = fullDesc.split(':');
+                        const nameAndMax = parts[0].trim(); // e.g., 'A: Ingredients (max 4)'
+                        const effect = parts.slice(1).join(':').trim(); // e.g., '+20 to Highest Color, -4 to Lowest Color.'
+                        
+                        // Remove the letter prefix for display
+                        const simpleName = nameAndMax.substring(nameAndMax.indexOf(':') + 1).trim();
+
+                        return `<p><span class="card-name">${simpleName}</span>: ${effect}</p>`;
+                    }).join('')}
+                </div>
             `;
+            
+            // 5. Render Presets Dropdown
+            setupSelector.innerHTML = '';
+            const configs = activeGameConfig.setupConfigs;
+            let firstKey = null;
+            let isFirst = true;
+            for (const key in configs) {
+                if (isFirst) { firstKey = key; isFirst = false; }
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = configs[key].name;
+                setupSelector.appendChild(option);
+            }
 
-            top_5_results.forEach((result, index) => {
-                const counts = result.counts;
-                const prob1 = result.probability_1.toFixed(2);
-                const prob2 = result.probability_2.toFixed(2);
-                
-                // BUILD THE DESCRIPTIVE COMBINATION STRING
-                let combinationString = [];
-                for (const [cardLetter, count] of Object.entries(counts)) {
-                    if (count > 0) {
-                        const cardName = CARD_NAMES[cardLetter];
-                        combinationString.push(`${cardName} (${count})`);
-                    }
-                }
-                const combinationText = combinationString.join(', ');
-                
-                // Color the probabilities based on success
-                const prob1_class = prob1 > 0 ? 'text-green-600 font-bold' : 'text-gray-500';
-                const prob2_class = prob2 > 0 ? 'text-green-700 font-bold' : 'text-gray-500';
-
-                html += `
-                    <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-amber-50 transition duration-100">
-                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-800 font-bold">${index + 1}</td>
-                        <td class="px-3 py-3 text-sm text-gray-600">
-                            ${combinationText}
-                        </td>
-                        <td class="px-3 py-3 whitespace-nowrap text-sm text-right ${prob1_class}">${prob1}%</td>
-                        <td class="px-3 py-3 whitespace-nowrap text-sm text-right ${prob2_class}">${prob2}%</td>
-                    </tr>
-                `;
-            });
-
-            html += `</tbody></table>`;
-            container.innerHTML = html;
+            // 6. Apply initial preset values
+            setupSelector.value = firstKey;
+            updateUIFromSetup();
+            
+            // 7. Clear Results
+            document.getElementById('resultsTable').classList.add('hidden');
+            document.getElementById('noResults').classList.add('hidden');
+            document.getElementById('totalCombinations').textContent = '';
         }
 
         async function runSimulation() {
-            const numCards = parseInt(document.getElementById('numCards').value);
-            const threshold1 = parseInt(document.getElementById('threshold1').value);
-            const threshold2 = parseInt(document.getElementById('threshold2').value);
-            const statusDiv = document.getElementById('loadingStatus');
-            const button = document.getElementById('simulateButton');
-            const resultsContainer = document.getElementById('resultsTableContainer');
+            const numCards = parseInt(numCardsInput.value); 
+            const threshold1 = parseInt(threshold1Input.value); 
+            const threshold2 = parseInt(threshold2Input.value); 
+            const setupId = setupSelector.value;
+            const config = activeGameConfig.setupConfigs[setupId];
+            const startingBonusType = config.bonusType;
 
-            // --- Input Validation ---
-            if (isNaN(numCards) || numCards < 3 || numCards > 8) {
-                resultsContainer.innerHTML = '<p class="text-red-600">Please enter a valid number of cards between 3 and 8.</p>';
+            const runButton = document.getElementById('runSimulation');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const resultsTable = document.getElementById('resultsTable');
+            const noResults = document.getElementById('noResults');
+            const totalCombinations = document.getElementById('totalCombinations');
+            const resultsBody = resultsTable.querySelector('tbody');
+
+            // Validation
+            if (numCards < MIN_CARDS || numCards > MAX_CARDS || isNaN(numCards)) {
+                alert(`Please enter a valid number of cards between ${MIN_CARDS} and ${MAX_CARDS}.`);
                 return;
             }
-            if (isNaN(threshold1) || isNaN(threshold2) || threshold1 <= 0 || threshold2 <= 0) {
-                resultsContainer.innerHTML = '<p class="text-red-600">Please enter valid, positive numbers for both thresholds.</p>';
+            if (isNaN(threshold1) || isNaN(threshold2)) {
+                alert('Please enter valid numeric values for both thresholds.');
                 return;
             }
 
-            // --- Start Loading State ---
-            button.disabled = true;
-            statusDiv.classList.remove('hidden');
-            resultsContainer.innerHTML = '';
+            // UI State: Running
+            runButton.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+            resultsTable.classList.add('hidden');
+            noResults.classList.add('hidden');
+            resultsBody.innerHTML = '';
+            totalCombinations.textContent = '';
             
-            // Use setTimeout to allow the UI to update the loading state before the heavy computation starts
-            await new Promise(resolve => setTimeout(resolve, 50)); 
+            const allCardCounts = generateCombinations(numCards, activeGameConfig.cardMaxes);
+            totalCombinations.textContent = `Testing ${allCardCounts.length} total unique card combinations for ${numCards} cards.`;
+            let probabilityResults = [];
 
-            // --- 1. Calculate Primary Threshold Probabilities ---
-            let allResults = calculate_all_initial_probabilities(numCards, threshold1);
-
-            // 2. Sort, filter non-zero results, and take the top 5
-            allResults.sort((a, b) => b.probability_1 - a.probability_1);
-            const top5 = allResults.filter(r => r.probability_1 > 0).slice(0, 5);
-            
-            // --- 3. Calculate Secondary Threshold Probability for Top 5 ---
-            for (const result of top5) {
-                result.probability_2 = calculate_single_probability(result.cards_list_base, threshold2, NUM_SIMULATIONS);
+            // Process combinations in chunks to allow the UI to update (non-blocking)
+            const chunkSize = 50; 
+            for (let i = 0; i < allCardCounts.length; i += chunkSize) {
+                const chunk = allCardCounts.slice(i, i + chunkSize);
+                
+                await new Promise(resolve => {
+                    setTimeout(() => {
+                        for (const counts of chunk) {
+                            const cardsListBase = [];
+                            for (const letter in counts) {
+                                cardsListBase.push(...Array(counts[letter]).fill(letter));
+                            }
+                            
+                            const prob1 = calculateSingleProbability(activeGameConfig, cardsListBase, threshold1, NUM_SIMULATIONS, startingBonusType);
+                            
+                            probabilityResults.push({
+                                counts,
+                                probability_1: prob1,
+                                cards_list_base: cardsListBase,
+                            });
+                        }
+                        loadingIndicator.textContent = `Calculating... Processed ${Math.min(i + chunkSize, allCardCounts.length)} of ${allCardCounts.length} combinations.`;
+                        resolve();
+                    }, 0); 
+                });
             }
 
-            // --- End Loading State ---
-            statusDiv.classList.add('hidden');
-            button.disabled = false;
+            // 1. Sort by primary probability (descending)
+            probabilityResults.sort((a, b) => b.probability_1 - a.probability_1);
+            
+            // 2. Filter non-zero results and take the top 5
+            const top5Results = probabilityResults.filter(r => r.probability_1 > 0).slice(0, 5);
 
-            // --- 4. Display Results ---
-            displayResults(top5, threshold1, threshold2);
+            // 3. Calculate Secondary Threshold Probability for Top 5
+            for (const result of top5Results) {
+                result.probability_2 = calculateSingleProbability(activeGameConfig, result.cards_list_base, threshold2, NUM_SIMULATIONS, startingBonusType);
+            }
+
+            // 4. Display results
+            if (top5Results.length > 0) {
+                top5Results.forEach((result, index) => {
+                    const combinationStringArray = [];
+                    const sortedLetters = Object.keys(result.counts).sort();
+                    
+                    for (const letter of sortedLetters) {
+                        const count = result.counts[letter];
+                        if (count > 0) {
+                            const fullDesc = activeGameConfig.cardDetails[letter];
+                            // Split on the first colon to separate Name/Max from Effect
+                            const parts = fullDesc.split(':');
+                            const nameAndMax = parts[0].trim(); // e.g., 'A: Ingredients (max 4)'
+                            
+                            // Remove the letter prefix and max count from the name for a cleaner result list
+                            const simpleName = nameAndMax.substring(nameAndMax.indexOf(':') + 1).trim().replace(/\s*\(max\s*\d\)/, '');
+                            
+                            // Collect card name and count string
+                            combinationStringArray.push(`${simpleName} (x${count})`);
+                        }
+                    }
+
+                    // Join array into a single comma-separated string
+                    const combinationString = combinationStringArray.join(', ');
+                    
+                    const row = resultsBody.insertRow();
+                    row.className = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+                    
+                    row.innerHTML = `
+                        <td class="font-bold">${index + 1}</td>
+                        <td class="py-2">
+                            <div class="font-bold text-gray-800">${combinationString}</div>
+                        </td>
+                        <td class="text-right font-mono text-lg text-indigo-700">${result.probability_1.toFixed(2)}%</td>
+                        <td class="text-right font-mono text-lg text-gray-600">${result.probability_2.toFixed(2)}%</td>
+                    `;
+                });
+                resultsTable.classList.remove('hidden');
+            } else {
+                noResults.classList.remove('hidden');
+            }
+
+            // UI State: Finished
+            runButton.disabled = false;
+            loadingIndicator.classList.add('hidden');
         }
+        
+        function swapThresholds() {
+            const t1Input = document.getElementById('threshold1');
+            const t2Input = document.getElementById('threshold2');
+            
+            const temp = t1Input.value;
+            t1Input.value = t2Input.value;
+            t2Input.value = temp;
+        }
+
+
+        // --- Initialization ---
+
+        // Set up event listeners
+        document.getElementById('swapThresholds').addEventListener('click', swapThresholds);
+        document.getElementById('runSimulation').addEventListener('click', runSimulation);
+        setupSelector.addEventListener('change', updateUIFromSetup);
+
+        // Load the initial tab (Alchemy)
+        switchTab('alchemy'); 
+
     </script>
 </body>
 </html>
