@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DS12 Kitchen Game Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+        .card-effect { background-color: #e9ecef; padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 sm:p-10">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-2 border-b-4 border-amber-500 pb-2">
+            DS12 Kitchen Game Simulator
+        </h1>
+        <p class="text-gray-600 mb-6">Analyze card combinations for the best chance of exceeding two product thresholds. (Simulation runs **20,000 trials** per combination)</p>
+
+        <!-- Card Effects Reference -->
+        <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <h3 class="font-semibold text-lg text-amber-700 mb-3">Card Effects</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-700">
+                <div class="card-effect">A (Heat Control, Max 4): +12 to random color. 50% chance to retrigger (recursive).</div>
+                <div class="card-effect">B (Cut, Max 3): +10-15 to Random Color.</div>
+                <div class="card-effect">C (Season, Max 1): x2 to random color.</div>
+                <div class="card-effect">D (Slow Cook, Max 2): +4 to all colors when Heat Control (A) triggers (cumulative).</div>
+                <div class="card-effect">E (Ferment, Max 2): Future Heat Control effects retrigger at least 2 times (i.e., +1 guaranteed extra trigger, cumulative).</div>
+                <div class="card-effect">F (Bake, Max 1): Redistribute point difference at the end (to maximize product).</div>
+            </div>
+        </div>
+
+        <!-- Input Form -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
+            <div class="col-span-1">
+                <label for="numCards" class="block text-sm font-medium text-gray-700 mb-1">Cards Drawn (5-10):</label>
+                <input type="number" id="numCards" value="6" min="5" max="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 transition duration-150 shadow-sm">
+            </div>
+            <div class="col-span-1">
+                <label for="threshold1" class="block text-sm font-medium text-gray-700 mb-1">Primary Threshold (&gt;):</label>
+                <input type="number" id="threshold1" value="5000" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 transition duration-150 shadow-sm">
+            </div>
+            <div class="col-span-1">
+                <label for="threshold2" class="block text-sm font-medium text-gray-700 mb-1">Secondary Threshold (&gt;):</label>
+                <input type="number" id="threshold2" value="7500" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 transition duration-150 shadow-sm">
+            </div>
+            <div class="col-span-1">
+                <button onclick="runSimulation()" id="simulateButton" 
+                        class="w-full p-3 bg-amber-600 text-white font-semibold rounded-lg shadow-md hover:bg-amber-700 focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                    Run Simulation
+                </button>
+            </div>
+        </div>
+
+        <!-- Output and Loading Status -->
+        <div id="loadingStatus" class="hidden text-center p-4 bg-blue-100 text-blue-700 rounded-lg mb-6">
+            <div class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></div>
+            Calculating probabilities for thousands of combinations... Please wait.
+        </div>
+        
+        <div id="resultsOutput">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Top 5 Results</h2>
+            <div id="resultsTableContainer">
+                <p class="text-gray-500">Enter your settings and click 'Run Simulation' to see results.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CARD_MAXES = { 'A': 4, 'B': 3, 'C': 1, 'D': 2, 'E': 2, 'F': 1 };
+        const NUM_SIMULATIONS = 20000; // Reduced from 100000 to 20000
+        const CARD_NAMES = {
+            'A': 'Heat Control',
+            'B': 'Cut',
+            'C': 'Season',
+            'D': 'Slow Cook',
+            'E': 'Ferment',
+            'F': 'Bake'
+        };
+
+        /**
+         * Core simulation logic for a single game run.
+         * @param {string[]} card_permutation - The drawn cards in order.
+         * @returns {number} The final product of X * Y.
+         */
+        function simulate_game(card_permutation) {
+            let x = 1;
+            let y = 1;
+            
+            let d_slow_cook_bonus = 0; // Card D: Slow Cook
+            let e_ferment_triggers = 0; // Card E: Ferment
+            let f_bake_used = false; // Card F: Bake
+
+            for (const card of card_permutation) {
+                
+                // --- Handle Persistent Effects (D, E, F) ---
+                if (card === 'D') {
+                    // Slow Cook: +4 to all colors when Heat Control (A) triggers (cumulative).
+                    d_slow_cook_bonus += 4;
+                    continue;
+                }
+                
+                if (card === 'E') {
+                    // Ferment: Future Heat Control effects retrigger at least 2 times (+1 guaranteed extra trigger, cumulative).
+                    e_ferment_triggers += 1;
+                    continue;
+                }
+                
+                if (card === 'F') {
+                    // Bake: Mark for redistribution at the end.
+                    f_bake_used = true;
+                    continue;
+                }
+
+                // --- Card A (Heat Control) Logic ---
+                if (card === 'A') {
+                    // Base triggers: 1 + guaranteed extra triggers from Ferment (E)
+                    const num_initial_triggers = 1 + e_ferment_triggers; 
+                    
+                    let total_triggers = 0;
+                    
+                    for (let i = 0; i < num_initial_triggers; i++) {
+                        // Guaranteed trigger (base or E-guaranteed)
+                        total_triggers += 1;
+                        
+                        // Only the initial base trigger has the recursive property (i === 0)
+                        if (i === 0) { 
+                            while (Math.random() < 0.5) { // 50% chance to retrigger
+                                total_triggers += 1;
+                            }
+                        }
+                    }
+                    
+                    // Apply effects for all resulting triggers
+                    const current_add = 12;
+                    for (let i = 0; i < total_triggers; i++) {
+                        
+                        // Apply Slow Cook (D) bonus first
+                        x += d_slow_cook_bonus;
+                        y += d_slow_cook_bonus;
+                        
+                        // Apply Heat Control (A) base effect
+                        if (Math.random() < 0.5) {
+                            x += current_add;
+                        } else {
+                            y += current_add;
+                        }
+                    }
+
+                } 
+                
+                // --- Card B (Cut) Logic ---
+                else if (card === 'B') {
+                    // Card B (Cut): +10-15 to Random Color.
+                    // Math.floor(Math.random() * (max - min + 1)) + min;
+                    const current_add = Math.floor(Math.random() * 6) + 10;
+                    if (Math.random() < 0.5) {
+                        x += current_add;
+                    } else {
+                        y += current_add;
+                    }
+                }
+                
+                // --- Card C (Season) Logic ---
+                else if (card === 'C') {
+                    // Card C (Season): x2 to random color.
+                    if (Math.random() < 0.5) {
+                        x *= 2;
+                    } else {
+                        y *= 2;
+                    }
+                }
+            }
+
+            // --- Final Effect: Bake (F) Redistribution ---
+            if (f_bake_used) {
+                const total = x + y;
+                // To maximize the product, X and Y should be as close as possible (median)
+                x = Math.floor(total / 2); // Floor
+                y = total - x;             // Remainder (Ceiling)
+            }
+            
+            return x * y;
+        }
+
+        /**
+         * Calculates the probability for a specific card combination against a threshold.
+         */
+        function calculate_single_probability(cards_list_base, threshold, num_simulations) {
+            let total_successful_simulations = 0;
+            
+            for (let i = 0; i < num_simulations; i++) {
+                // Create a mutable copy and shuffle for this trial
+                let cards = [...cards_list_base];
+                shuffleArray(cards);
+                
+                const product = simulate_game(cards);
+                if (product > threshold) {
+                    total_successful_simulations++;
+                }
+            }
+            
+            return (total_successful_simulations / num_simulations) * 100;
+        }
+
+        /**
+         * Generates all valid card combinations and calculates the probability against the primary threshold.
+         */
+        function calculate_all_initial_probabilities(num_cards, threshold_1) {
+            const card_counts_list = [];
+            
+            // Generate all valid card count combinations using nested loops
+            for (let a = 0; a <= CARD_MAXES['A']; a++) { 
+                for (let b = 0; b <= CARD_MAXES['B']; b++) { 
+                    for (let c = 0; c <= CARD_MAXES['C']; c++) { 
+                        for (let d = 0; d <= CARD_MAXES['D']; d++) { 
+                            for (let e = 0; e <= CARD_MAXES['E']; e++) { 
+                                for (let f = 0; f <= CARD_MAXES['F']; f++) {
+                                    if (a + b + c + d + e + f === num_cards) {
+                                        card_counts_list.push({ 'A': a, 'B': b, 'C': c, 'D': d, 'E': e, 'F': f });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            const probability_results = [];
+            
+            for (const counts of card_counts_list) {
+                // Create the full list of cards for this combination
+                const cards_list_base = [
+                    ...Array(counts['A']).fill('A'),
+                    ...Array(counts['B']).fill('B'),
+                    ...Array(counts['C']).fill('C'),
+                    ...Array(counts['D']).fill('D'),
+                    ...Array(counts['E']).fill('E'),
+                    ...Array(counts['F']).fill('F'),
+                ];
+
+                // Calculate probability for threshold_1 (Primary)
+                const prob_1 = calculate_single_probability(cards_list_base, threshold_1, NUM_SIMULATIONS);
+
+                probability_results.push({
+                    counts,
+                    probability_1: prob_1, 
+                    cards_list_base, // Store the list for later use
+                });
+            }
+            
+            return probability_results;
+        }
+
+        /** Utility function to shuffle an array (Fisher-Yates) */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function displayResults(top_5_results, threshold1, threshold2) {
+            const container = document.getElementById('resultsTableContainer');
+            if (top_5_results.length === 0) {
+                container.innerHTML = `<p class="text-red-600 font-semibold p-4 bg-red-50 border border-red-200 rounded-lg">No combinations could exceed the primary threshold of > ${threshold1}.</p>`;
+                return;
+            }
+
+            let html = `
+                <table class="min-w-full divide-y divide-gray-200 rounded-lg overflow-hidden shadow-lg">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-10">Rank</th>
+                            <th class="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Card Combination</th>
+                            <th class="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">P(&gt;${threshold1})</th>
+                            <th class="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">P(&gt;${threshold2})</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+            `;
+
+            top_5_results.forEach((result, index) => {
+                const counts = result.counts;
+                const prob1 = result.probability_1.toFixed(2);
+                const prob2 = result.probability_2.toFixed(2);
+                
+                // BUILD THE DESCRIPTIVE COMBINATION STRING
+                let combinationString = [];
+                for (const [cardLetter, count] of Object.entries(counts)) {
+                    if (count > 0) {
+                        const cardName = CARD_NAMES[cardLetter];
+                        combinationString.push(`${cardName} (${count})`);
+                    }
+                }
+                const combinationText = combinationString.join(', ');
+                
+                // Color the probabilities based on success
+                const prob1_class = prob1 > 0 ? 'text-green-600 font-bold' : 'text-gray-500';
+                const prob2_class = prob2 > 0 ? 'text-green-700 font-bold' : 'text-gray-500';
+
+                html += `
+                    <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-amber-50 transition duration-100">
+                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-800 font-bold">${index + 1}</td>
+                        <td class="px-3 py-3 text-sm text-gray-600">
+                            ${combinationText}
+                        </td>
+                        <td class="px-3 py-3 whitespace-nowrap text-sm text-right ${prob1_class}">${prob1}%</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-sm text-right ${prob2_class}">${prob2}%</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        async function runSimulation() {
+            const numCards = parseInt(document.getElementById('numCards').value);
+            const threshold1 = parseInt(document.getElementById('threshold1').value);
+            const threshold2 = parseInt(document.getElementById('threshold2').value);
+            const statusDiv = document.getElementById('loadingStatus');
+            const button = document.getElementById('simulateButton');
+            const resultsContainer = document.getElementById('resultsTableContainer');
+
+            // --- Input Validation ---
+            if (isNaN(numCards) || numCards < 5 || numCards > 10) {
+                resultsContainer.innerHTML = '<p class="text-red-600">Please enter a valid number of cards between 5 and 10.</p>';
+                return;
+            }
+            if (isNaN(threshold1) || isNaN(threshold2) || threshold1 <= 0 || threshold2 <= 0) {
+                resultsContainer.innerHTML = '<p class="text-red-600">Please enter valid, positive numbers for both thresholds.</p>';
+                return;
+            }
+
+            // --- Start Loading State ---
+            button.disabled = true;
+            statusDiv.classList.remove('hidden');
+            resultsContainer.innerHTML = '';
+            
+            // Use setTimeout to allow the UI to update the loading state before the heavy computation starts
+            await new Promise(resolve => setTimeout(resolve, 50)); 
+
+            // --- 1. Calculate Primary Threshold Probabilities ---
+            let allResults = calculate_all_initial_probabilities(numCards, threshold1);
+
+            // 2. Sort, filter non-zero results, and take the top 5
+            allResults.sort((a, b) => b.probability_1 - a.probability_1);
+            const top5 = allResults.filter(r => r.probability_1 > 0).slice(0, 5);
+            
+            // --- 3. Calculate Secondary Threshold Probability for Top 5 ---
+            for (const result of top5) {
+                result.probability_2 = calculate_single_probability(result.cards_list_base, threshold2, NUM_SIMULATIONS);
+            }
+
+            // --- End Loading State ---
+            statusDiv.classList.add('hidden');
+            button.disabled = false;
+
+            // --- 4. Display Results ---
+            displayResults(top5, threshold1, threshold2);
+        }
+    </script>
+</body>
+</html>
