@@ -26,7 +26,7 @@
                 <div class="card-effect">B (Cut, Max 3): +10-15 to Random Color.</div>
                 <div class="card-effect">C (Season, Max 1): x2 to random color.</div>
                 <div class="card-effect">D (Slow Cook, Max 2): +4 to all colors when Heat Control (A) triggers (cumulative).</div>
-                <div class="card-effect">E (Ferment, Max 2): Future Heat Control effects retrigger at least 2 times (i.e., +1 guaranteed extra trigger, cumulative).</div>
+                <div class="card-effect">E (Ferment, Max 2): Future Heat Control effects retrigger at least 2 times (i.e., +2 guaranteed extra trigger, cumulative).</div>
                 <div class="card-effect">F (Bake, Max 1): Redistribute point difference at the end (to maximize product).</div>
             </div>
         </div>
@@ -103,7 +103,7 @@
                 
                 if (card === 'E') {
                     // Ferment: Future Heat Control effects retrigger at least 2 times (+1 guaranteed extra trigger, cumulative).
-                    e_ferment_triggers += 1;
+                    e_ferment_triggers += 2;
                     continue;
                 }
                 
