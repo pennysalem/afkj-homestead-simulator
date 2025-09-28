@@ -45,7 +45,7 @@
         <div id="app-container" class="p-6">
             
             <h1 id="game-title" class="text-3xl font-bold text-center text-gray-800 mb-2">
-                🧪 Alchemy Game Simulator (DS12)
+                🧪 Alchemy Game Simulator
             </h1>
             <p class="text-center text-sm text-gray-500 mb-6">
                 Simulates 10,000 trials for every valid card combination to find the highest probability of success.
@@ -55,6 +55,12 @@
             <div id="card-definitions" class="bg-indigo-50 p-4 rounded-lg mb-6 border border-indigo-200">
                 <!-- Card definitions will be injected here -->
             </div>
+
+            <!-- Optional Bonuses Container -->
+            <div id="optional-bonuses-container" class="mb-4 p-4 border border-gray-200 rounded-lg hidden">
+                <!-- Checkboxes injected here -->
+            </div>
+
 
             <!-- Input Form -->
             <div class="flex flex-col sm:flex-row gap-4 mb-6">
@@ -135,7 +141,7 @@
         // --- ALCHEMY GAME CONFIG ---
         const ALCHEMY_CONFIG = {
             id: 'alchemy',
-            title: '🧪 Alchemy Game Simulator (DS12)',
+            title: '🧪 Alchemy Game Simulator',
             cardMaxes: { 'A': 4, 'B': 4, 'C': 1, 'D': 2, 'E': 2, 'F': 1, 'H': 2 },
             cardDetails: {
                 'A': 'Ingredients (max 4): +20 to Highest Color, -4 to Lowest Color.',
@@ -152,7 +158,7 @@
                 'refined_illusion': { name: 'Refined Illusion Potion', numCards: 7, t1: 5150, t2: 10900, bonusType: 'none' },
                 'fireward_ring': { name: 'Fireward Ring', numCards: 9, t1: 6630, t2: 8200, bonusType: 'firewardRingStart' } // +15 to Random Color at Start
             },
-            simulateGame: (cardPermutation, startingBonusType) => {
+            simulateGame: (cardPermutation, startingBonusType, optionalSettings) => {
                 let x = 1; let y = 1;
                 
                 // --- Fireward Ring Initial Bonus ---
@@ -212,7 +218,7 @@
         // --- KITCHEN GAME CONFIG ---
         const KITCHEN_CONFIG = {
             id: 'kitchen',
-            title: '🔪 Kitchen Game Simulator (DS12)',
+            title: '🔪 Kitchen Game Simulator',
             cardMaxes: { 'A': 4, 'B': 3, 'C': 1, 'D': 2, 'E': 2, 'F': 1 },
             cardDetails: {
                 'A': 'Heat Control (max 4): +12 to random color. 50% chance to retrigger recursively.',
@@ -228,10 +234,13 @@
                 'salted_corn_chips': { name: 'Salted Corn Chips', numCards: 5, t1: 4620, t2: 12300, bonusType: 'none' },
                 'odd_sweet': { name: 'Odd Sweet', numCards: 8, t1: 18500, t2: 30900, bonusType: 'oddSweetEndGame' } // +5 to all colors if the final point gap is less than 5
             },
-            simulateGame: (cardPermutation, startingBonusType) => {
+            simulateGame: (cardPermutation, startingBonusType, optionalSettings) => {
                 let x = 1; let y = 1;
                 
+                // D modifier: 4 or 5 based on optionalSettings
+                const dSlowCookBase = optionalSettings.slowCookLevel4 ? 5 : 4;
                 let dSlowCookBonus = 0; 
+
                 let eFermentTriggers = 0; 
                 let fBakeDrawn = false;
                 let fermentUsed = false;
@@ -262,7 +271,7 @@
                         Math.random() < 0.5 ? x *= 2 : y *= 2;
                     } 
                     else if (card === 'D') {
-                        dSlowCookBonus += 4;
+                        dSlowCookBonus += dSlowCookBase; // Use the base value (4 or 5)
                     } 
                     else if (card === 'E' && !fermentUsed) {
                         eFermentTriggers = 2; // Non-cumulative, sets to 2
@@ -297,7 +306,7 @@
         // --- FORGE GAME CONFIG ---
         const FORGE_CONFIG = {
             id: 'forge',
-            title: '🔥 Forge Game Simulator (DS12)',
+            title: '🔥 Forge Game Simulator',
             cardMaxes: { 'A': 4, 'B': 4, 'C': 1, 'D': 2, 'E': 2, 'F': 2, 'G': 2, 'H': 1, 'I': 2 },
             cardDetails: {
                 // A: Forge Expert (cumulative bonus re-added)
@@ -318,7 +327,7 @@
                 'firefang_sword': { name: 'Firefang Sword', numCards: 8, t1: 28900, t2: 92100, bonusType: 'firefangSwordA' }, // 30% chance for A to trigger 1 extra time (non recursive)
                 'fireproof_helm': { name: 'Fireproof Helm', numCards: 8, t1: 25100, t2: 61700, bonusType: 'fireproofHelmLimit' } // The First 3 "Forge" Cards affect all colors
             },
-            simulateGame: (cardPermutation, startingBonusType) => {
+            simulateGame: (cardPermutation, startingBonusType, optionalSettings) => {
                 let x = 1; let y = 1;
                 
                 // --- Persistent State/Penalties/Modifiers ---
@@ -374,7 +383,7 @@
                         // G: Reforge bonus
                         x += gReforgeBonus; y += gReforgeBonus;
                         
-                        // A: Recursive 30% check (for Firefang setup)
+                        // A: Cumulative bonus for future A's 
                         if (cardType === 'A' && startingBonusType === 'firefangSwordA' && Math.random() < 0.3) {
                             // Run the effect once more, non-recursively.
                             let bonusA = baseAdd + dBonusPerCard + aBonusPerCard; 
@@ -450,7 +459,7 @@
             return Math.max(1, value);
         }
 
-        function calculateSingleProbability(config, cardsListBase, threshold, numSimulations, startingBonusType) {
+        function calculateSingleProbability(config, cardsListBase, threshold, numSimulations, startingBonusType, optionalSettings) {
             let totalSuccessfulSimulations = 0;
             
             for (let i = 0; i < numSimulations; i++) {
@@ -460,7 +469,7 @@
                     [cards[j], cards[k]] = [cards[k], cards[j]];
                 }
 
-                const product = config.simulateGame(cards, startingBonusType);
+                const product = config.simulateGame(cards, startingBonusType, optionalSettings);
                 if (product > threshold) {
                     totalSuccessfulSimulations++;
                 }
@@ -509,6 +518,7 @@
         const startingBonusText = document.getElementById('startingBonusText');
         const cardDefinitionsDiv = document.getElementById('card-definitions');
         const gameTitle = document.getElementById('game-title');
+        const optionalBonusesContainer = document.getElementById('optional-bonuses-container');
 
 
         function updateUIFromSetup() {
@@ -533,6 +543,24 @@
             }
 
             startingBonusText.textContent = bonusDescription;
+        }
+
+        function renderOptionalBonuses(gameId) {
+            optionalBonusesContainer.innerHTML = ''; 
+            optionalBonusesContainer.classList.add('hidden');
+
+            if (gameId === 'kitchen') {
+                optionalBonusesContainer.classList.remove('hidden');
+                optionalBonusesContainer.innerHTML = `
+                    <div class="flex items-center">
+                        <input id="slowCookLevel4" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="slowCookLevel4" class="ml-2 block text-sm font-medium text-gray-700">
+                            Slow Cook Level 4: +5 to All Colors when Heat Control Triggers.
+                        </label>
+                    </div>
+                `;
+            } 
+            // Add other game specific bonuses here if needed later
         }
 
         function switchTab(gameId) {
@@ -580,8 +608,11 @@
             // 6. Apply initial preset values
             setupSelector.value = firstKey;
             updateUIFromSetup();
+
+            // 7. Render Optional Bonuses (like the Slow Cook Level 4 checkbox)
+            renderOptionalBonuses(gameId);
             
-            // 7. Clear Results
+            // 8. Clear Results
             document.getElementById('resultsTable').classList.add('hidden');
             document.getElementById('noResults').classList.add('hidden');
             document.getElementById('totalCombinations').textContent = '';
@@ -594,6 +625,12 @@
             const setupId = setupSelector.value;
             const config = activeGameConfig.setupConfigs[setupId];
             const startingBonusType = config.bonusType;
+
+            // Capture optional settings for the active game
+            let optionalSettings = {};
+            if (activeGameConfig.id === 'kitchen') {
+                optionalSettings.slowCookLevel4 = document.getElementById('slowCookLevel4').checked;
+            }
 
             const runButton = document.getElementById('runSimulation');
             const loadingIndicator = document.getElementById('loadingIndicator');
@@ -637,7 +674,7 @@
                                 cardsListBase.push(...Array(counts[letter]).fill(letter));
                             }
                             
-                            const prob1 = calculateSingleProbability(activeGameConfig, cardsListBase, threshold1, NUM_SIMULATIONS, startingBonusType);
+                            const prob1 = calculateSingleProbability(activeGameConfig, cardsListBase, threshold1, NUM_SIMULATIONS, startingBonusType, optionalSettings);
                             
                             probabilityResults.push({
                                 counts,
@@ -659,7 +696,7 @@
 
             // 3. Calculate Secondary Threshold Probability for Top 5
             for (const result of top5Results) {
-                result.probability_2 = calculateSingleProbability(activeGameConfig, result.cards_list_base, threshold2, NUM_SIMULATIONS, startingBonusType);
+                result.probability_2 = calculateSingleProbability(activeGameConfig, result.cards_list_base, threshold2, NUM_SIMULATIONS, startingBonusType, optionalSettings);
             }
 
             // 4. Display results
