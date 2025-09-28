@@ -161,6 +161,15 @@
             simulateGame: (cardPermutation, startingBonusType, optionalSettings) => {
                 let x = 1; let y = 1;
                 
+                // --- Configurable B values ---
+                const bAdd = optionalSettings.grindLevel7 ? 20 : 15;
+                const bSub = optionalSettings.grindLevel7 ? 6 : 5;
+                
+                // --- Configurable F values ---
+                const fLimit = optionalSettings.fuseLevel3 ? 50 : 20;
+                const fAdd = optionalSettings.fuseLevel3 ? 20 : 10;
+                const fRedistribute = optionalSettings.fuseLevel3;
+
                 // --- Fireward Ring Initial Bonus ---
                 if (startingBonusType === 'firewardRingStart') {
                     Math.random() < 0.5 ? x += 15 : y += 15;
@@ -178,7 +187,8 @@
                     if (card === 'H') { hOverchargeCount += 2; }
                     else if (card === 'A') { highestColor += 20; lowestColor -= 4; }
                     else if (card === 'B') {
-                        highestColor -= 5; lowestAddition = 15;
+                        highestColor -= bSub; // Configurable subtraction
+                        lowestAddition = bAdd; // Configurable addition
                         if (hOverchargeCount > 0) { highestColor += (lowestAddition * 3); hOverchargeCount -= 1; } 
                         else { lowestColor += lowestAddition; }
                     }
@@ -208,7 +218,13 @@
                     
                 if (fFuseDrawn) { // F End-game
                     const pointGap = Math.abs(x - y);
-                    if (pointGap < 20) { x += 10; y += 10; }
+                    if (pointGap < fLimit) { // Configurable limit
+                        x += fAdd; y += fAdd; // Configurable addition
+                        if (fRedistribute) { // Configurable redistribution
+                            const avg = Math.floor((x + y) / 2);
+                            x = avg; y = avg;
+                        }
+                    }
                 }
                     
                 return x * y;
@@ -244,6 +260,7 @@
                 let eFermentTriggers = 0; 
                 let fBakeDrawn = false;
                 let fermentUsed = false;
+                let cutStreak = 0; // NEW: Streak counter for Card B
 
                 const applyAEffect = (add, recursionDepth = 0) => {
                     if (Math.random() < 0.5) { x += add; } else { y += add; }
@@ -254,6 +271,7 @@
 
                 for (const card of cardPermutation) {
                     if (card === 'A') {
+                        cutStreak = 0; // Reset streak on non-B card
                         let add = 12;
                         let extraTriggers = eFermentTriggers;
                         if (eFermentTriggers > 0) { eFermentTriggers = 0; } // Consume E's effect
@@ -264,20 +282,36 @@
                         }
                     } 
                     else if (card === 'B') {
-                        const add = Math.floor(Math.random() * 6) + 10; // 10-15
-                        if (Math.random() < 0.5) { x += add; } else { y += add; }
+                        const baseAdd = Math.floor(Math.random() * 6) + 10; // 10-15
+                        
+                        let numTriggers = 1;
+                        if (optionalSettings.cutLevel7) {
+                            cutStreak += 1; // Increment streak
+                            numTriggers += (cutStreak - 1); // Extra triggers: 1st B: 0, 2nd B: 1, 3rd B: 2, etc.
+                        } else {
+                            cutStreak = 0; // Reset streak if feature is off
+                            numTriggers = 1; 
+                        }
+
+                        for (let i = 0; i < numTriggers; i++) {
+                            if (Math.random() < 0.5) { x += baseAdd; } else { y += baseAdd; }
+                        }
                     } 
                     else if (card === 'C') {
+                        cutStreak = 0; // Reset streak on non-B card
                         Math.random() < 0.5 ? x *= 2 : y *= 2;
                     } 
                     else if (card === 'D') {
+                        cutStreak = 0; // Reset streak on non-B card
                         dSlowCookBonus += dSlowCookBase; // Use the base value (4 or 5)
                     } 
                     else if (card === 'E' && !fermentUsed) {
+                        cutStreak = 0; // Reset streak on non-B card
                         eFermentTriggers = 2; // Non-cumulative, sets to 2
                         fermentUsed = true;
                     } 
                     else if (card === 'F') {
+                        cutStreak = 0; // Reset streak on non-B card
                         fBakeDrawn = true;
                     }
                     
@@ -330,12 +364,18 @@
             simulateGame: (cardPermutation, startingBonusType, optionalSettings) => {
                 let x = 1; let y = 1;
                 
+                // B modifier: 10 or 15 based on optionalSettings
+                const bForgeBase = optionalSettings.forgeLevel6 ? 15 : 10;
+                
+                // G modifier: 3 or 10 based on optionalSettings
+                const gReforgeBase = optionalSettings.reforgeLevel2 ? 10 : 3;
+
                 // --- Persistent State/Penalties/Modifiers ---
                 let dBonusPerCard = 0;    // D: Heat Up bonus for A, B, I (cumulative, +10)
                 let aBonusPerCard = 0;    // A: Forge Expert cumulative bonus (+5 for future A's)
                 let eChargeActive = false;  // E: Charge (now persistent)
                 let fMultiTriggers = 0;   // F: Multi-Forge (stacking extra triggers)
-                let gReforgeBonus = 0;    // G: Reforge (+3 all colors on Artisan trigger)
+                let gReforgeBonus = 0;    // G: Reforge bonus (cumulative, added to x and y on Artisan trigger)
                 let hSharpeningActive = false; // H: Sharpening is active (boolean for non-stacking)
                 let cardsSeenGlobally = new Set(); // H: Tracks unique cards drawn
                 
@@ -380,7 +420,7 @@
                             y += currentAdd;
                         }
 
-                        // G: Reforge bonus
+                        // G: Reforge bonus (uses cumulative gReforgeBonus)
                         x += gReforgeBonus; y += gReforgeBonus;
                         
                         // A: Cumulative bonus for future A's 
@@ -416,7 +456,7 @@
                     
                     if (card === 'A') { applyArtisanEffect(5, 'A'); } 
                     else if (card === 'B') { 
-                        applyArtisanEffect(10, 'B');
+                        applyArtisanEffect(bForgeBase, 'B'); // Use bForgeBase (10 or 15)
                         if (startingBonusType === 'fireproofHelmLimit' && forgeCardsPlayed < 3) {
                             forgeCardsPlayed++;
                         }
@@ -425,7 +465,7 @@
                     else if (card === 'D') { dBonusPerCard += 10; }
                     else if (card === 'E') { eChargeActive = true; }
                     else if (card === 'F') { fMultiTriggers += 1; } 
-                    else if (card === 'G') { gReforgeBonus += 3; }
+                    else if (card === 'G') { gReforgeBonus += gReforgeBase; } // Uses configurable gReforgeBase
                     else if (card === 'H') { hSharpeningActive = true; } 
                     else if (card === 'I') { applyArtisanEffect(12, 'I'); }
 
@@ -549,18 +589,63 @@
             optionalBonusesContainer.innerHTML = ''; 
             optionalBonusesContainer.classList.add('hidden');
 
-            if (gameId === 'kitchen') {
+            if (gameId === 'alchemy') {
                 optionalBonusesContainer.classList.remove('hidden');
                 optionalBonusesContainer.innerHTML = `
+                    <div class="flex items-center mb-2">
+                        <input id="grindLevel7" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="grindLevel7" class="ml-2 block text-sm font-medium text-gray-700">
+                            Grind Level 7: +20 to Lowest Color, -6 to Highest Color.
+                        </label>
+                    </div>
                     <div class="flex items-center">
+                        <input id="fuseLevel3" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="fuseLevel3" class="ml-2 block text-sm font-medium text-gray-700">
+                            Fuse Level 3: +20 to All Colors and Redistribute Point Difference if Point Gap &lt; 50.
+                        </label>
+                    </div>
+                `;
+            } else if (gameId === 'kitchen') {
+                optionalBonusesContainer.classList.remove('hidden');
+                optionalBonusesContainer.innerHTML = `
+                    <div class="flex items-center mb-2">
                         <input id="slowCookLevel4" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                         <label for="slowCookLevel4" class="ml-2 block text-sm font-medium text-gray-700">
                             Slow Cook Level 4: +5 to All Colors when Heat Control Triggers.
                         </label>
                     </div>
+                    <div class="flex items-center">
+                        <input id="cutLevel7" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="cutLevel7" class="ml-2 block text-sm font-medium text-gray-700">
+                            Cut Level 7: Consecutive Cuts trigger 1 extra time per streak length (e.g., 3 in row = 1+2+3 triggers).
+                        </label>
+                    </div>
                 `;
-            } 
-            // Add other game specific bonuses here if needed later
+            } else if (gameId === 'forge') {
+                optionalBonusesContainer.classList.remove('hidden');
+                optionalBonusesContainer.innerHTML = `
+                    <div class="flex items-center mb-2">
+                        <input id="forgeLevel6" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="forgeLevel6" class="ml-2 block text-sm font-medium text-gray-700">
+                            Forge Level 6: +15 to Random Color (instead of +10).
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        <input id="reforgeLevel2" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="reforgeLevel2" class="ml-2 block text-sm font-medium text-gray-700">
+                            Reforge Level 2: +10 to All Colors when Artisan effect triggers (instead of +3).
+                        </label>
+                    </div>
+                `;
+            }
+            // Add event listeners for the new checkboxes (they are dynamically created)
+            if (gameId === 'alchemy') {
+                document.getElementById('grindLevel7').addEventListener('change', updateUIFromSetup);
+                document.getElementById('fuseLevel3').addEventListener('change', updateUIFromSetup);
+            } else if (gameId === 'forge') {
+                 document.getElementById('forgeLevel6').addEventListener('change', updateUIFromSetup);
+                 document.getElementById('reforgeLevel2').addEventListener('change', updateUIFromSetup);
+            }
         }
 
         function switchTab(gameId) {
@@ -628,8 +713,15 @@
 
             // Capture optional settings for the active game
             let optionalSettings = {};
-            if (activeGameConfig.id === 'kitchen') {
-                optionalSettings.slowCookLevel4 = document.getElementById('slowCookLevel4').checked;
+            if (activeGameConfig.id === 'alchemy') {
+                optionalSettings.grindLevel7 = document.getElementById('grindLevel7')?.checked || false;
+                optionalSettings.fuseLevel3 = document.getElementById('fuseLevel3')?.checked || false;
+            } else if (activeGameConfig.id === 'kitchen') {
+                optionalSettings.slowCookLevel4 = document.getElementById('slowCookLevel4')?.checked || false;
+                optionalSettings.cutLevel7 = document.getElementById('cutLevel7')?.checked || false;
+            } else if (activeGameConfig.id === 'forge') {
+                optionalSettings.forgeLevel6 = document.getElementById('forgeLevel6')?.checked || false;
+                optionalSettings.reforgeLevel2 = document.getElementById('reforgeLevel2')?.checked || false; // Capture new setting
             }
 
             const runButton = document.getElementById('runSimulation');
